@@ -1,5 +1,6 @@
 # DS/Analytics Projects
 Shi (Nick) Qiu
+
 This repository is mainly for data science or analytics projects that I have completed
 
 ## Order Delay Prediction Project 
