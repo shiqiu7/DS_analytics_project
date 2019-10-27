@@ -7,11 +7,11 @@ This repository is mainly for data science or analytics projects that I have com
 - Topic: Machine Learning
 - Tool: Python
 
-## google merchandise store
+## Google Merchandise Store Analysis
 - Topic: Product Analytics
 - Tools: Google Analytics, R
 
-## UCLA Anderson website
+## UCLA Anderson Website Analysis
 - Topic: Product Analytics
 - Tools: SQL, Tableau
 
