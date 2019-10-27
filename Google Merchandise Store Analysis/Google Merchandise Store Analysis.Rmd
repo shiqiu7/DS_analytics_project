@@ -1,0 +1,159 @@
+---
+title: "Google Merchandise Store Analysis"
+output:
+  word_document: default
+  pdf_document: default
+header-includes: \usepackage{rotating, graphicx}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(readxl)
+library(ggplot2)
+library(knitr)
+
+library(data.table)
+```
+
+## Part 1: Find the most valuable acquisition channel 
+
+### 1. Visualize user trends over time on Google Analytics
+Look at the users and the non-bounce users of Google Merchandise store in the last 2 years.
+Although total users have a few spikes, non-bounce users have a stable pattern overtime.
+
+```{r, fig.pos= "H", out.width = "400px"}
+include_graphics("image1.png")
+```
+
+
+
+
+### 2. Import data from Google Analytics and explore data
+
+
+```{r}
+dat <- read_excel("Analytics 1 Master View Channels 20180810-20190810.xlsx", sheet = "Dataset1")
+dat <- dat[!is.na(dat$Date), ]
+dat$Date <- as.Date(dat$Date, format = "%Y%m%d")
+
+```
+
+
+For most acquisition channel, user in weekdays and weekend have significant difference, showing that weekend is a strong feature that needs to be controlled.
+
+```{r}
+dat$dow <- lubridate::wday(dat$Date, label = TRUE)
+dat$weekend <- 0
+dat$weekend[dat$dow %in% c("Sat", "Sun")] <- 1
+
+ggplot(dat, aes(x = Date,
+                y = Users, color = factor(weekend))) +
+  geom_point() +
+  facet_wrap(~`Default Channel Grouping`)
+
+dat <- dat[dat$`Default Channel Grouping`!= "(Other)", ]
+```
+
+
+
+
+
+
+###3. Regression
+Run regression to explore the relationship between acquisition channel and:
+a. Bounce Rate 
+b. Average Session Duration 
+c. E-commerce Conversion Rate 
+d. Revenue
+
+The variables we need to control to avoid omitted variable bias:
+1. time trends
+2. the number of new users
+3. whether or not it is a weekend
+
+##4. Conclusion 
+Referral is the only channel that has significant advantage in all the 4 metrics (low bounce rate, high session duration, conversion rate, and revenue), which means that it is the most valuable acquistion channel 
+```{r}
+print("Bounce Rate")
+R1 <- lm(`Bounce Rate` ~ `Default Channel Grouping` + Date + `New Users` + weekend, data = dat,method = 'binomial')
+
+ summary(R1)$coefficients
+print("Session Duration")
+R2 <- lm(`Avg. Session Duration` ~ `Default Channel Grouping` + Date + `New Users` + weekend, data = dat)
+ summary(R2)$coefficients
+print("Conversion Rate")
+R3 <- lm(`Ecommerce Conversion Rate` ~ `Default Channel Grouping` + Date + `New Users` + weekend, data = dat,,method = 'binomial')
+ summary(R3)$coefficients
+print("Revenue")
+R4 <- lm(Revenue ~ `Default Channel Grouping` + Date + `New Users` + weekend, data = dat)
+ summary(R4)$coefficients
+
+```
+
+## Part 2: Analyze what make customers add products to their carts
+
+###1. Import data from Google Analytics
+Create the segmentation that users who added a product to their cart
+
+
+```{r}
+library('sqldf')
+df1 <- read_excel("Analytics 1 Master View Channels 20190510-20190810.xlsx", sheet = "Dataset1")
+```
+###2. Data manipulation
+```{r}
+colnames(df1)[1]='Default_Channel_Grouping'
+colnames(df1)[6]='New_Users'
+colnames(df1)[8]='Bounce_Rate'
+colnames(df1)[9]='Pages_Session'
+colnames(df1)[10]='Avg_Session_Duration'
+colnames(df1)[11]='Conversion_Rate'
+df2=sqldf("select Date,
+sum(case when Segment='All Users' then Users end) as all_users,sum(case when segment='All Users' then New_Users end) as new_users,
+sum(case when Segment='All Users' then Sessions end) as sessions,
+sum(case when Segment='All Users' and Default_Channel_Grouping='(Other)' then Users end) as '(Others)',
+sum(case when Segment='All Users' and Default_Channel_Grouping='Affiliates' then Users end) as 'Affiliates',
+sum(case when Segment='All Users' and Default_Channel_Grouping='Direct' then Users end) as 'Direct',
+sum(case when Segment='All Users' and Default_Channel_Grouping='Display' then Users end) as 'Display',
+sum(case when Segment='All Users' and Default_Channel_Grouping='Organic Search' then Users end) as 'Organic Search',
+sum(case when Segment='All Users' and Default_Channel_Grouping='Paid Search' then Users end) as 'Paid Search',
+sum(case when Segment='All Users' and Default_Channel_Grouping='Referral' then Users end) as 'Referral',
+sum(case when Segment='All Users' and Default_Channel_Grouping='Social' then Users end) as 'Social',
+sum(case when Segment='All Users' then Bounce_Rate*Users end) as Bounce_Rate,
+sum(case when Segment='Added to cart' then Users end) as Added_cart,
+sum(case when Segment='All Users' then Users end) as All_Users,
+sum(case when Segment='All Users' then Avg_Session_Duration*Sessions end) as Avg_Session_Duration
+from df1
+where Date is not null
+group by Date")
+
+
+df2['Bounce_Rate']=df2['Bounce_Rate']/df2['all_users']*0.01
+df2['Avg_Session_Duration']=df2['Avg_Session_Duration']/df2['sessions']
+
+colnames(df2)[9] <- 'organic_search'
+colnames(df2)[10] <-'paid_search'
+colnames(df2)[5] <-'others'
+df2['cart_prob'] <- df2['Added_cart']/df2['All_Users']
+df2['cart_prob'] <- df2['Added_cart']/df2['All_Users']
+
+df2$Date=paste(substr(df2$Date,1,4),"-",substr(df2$Date,5,6),"-",substr(df2$Date,7,8),sep="")
+df2$Date=as.Date(df2$Date)
+```
+
+###3. Run regression on features to analyze  what makes users more or less likely to add products to their carts
+The variables we need to control to avoid omitted variable bias:
+1. Time trend
+2. acqusition channel
+3. number of all users
+
+##4. Conclusion
+The two significant variables are new users and average session duration. New users are less likely to add products to their cart. People spend more time on the page per session are more likely to add products to carts
+
+```{r}
+R1 <- lm(cart_prob~all_users+ new_users+Avg_Session_Duration+others+Affiliates+Direct+Display+organic_search+paid_search+Referral+Social+Date,data=df2)
+summary(R1)
+
+```
+
+
