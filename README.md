@@ -15,9 +15,5 @@ This repository is mainly for data science or analytics projects that I have com
 - Topic: Product Analytics
 - Tools: SQL, Tableau
 
-## Wag Lab 
-- Topic: data management/data visualizations
-- Tools: SQL, Tableau
-
 
 
